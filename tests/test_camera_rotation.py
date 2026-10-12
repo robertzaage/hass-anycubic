@@ -98,6 +98,9 @@ def _camera(rotation: int) -> AnycubicCamera:
     camera._printer_id = 1
     camera.entity_description = CAMERA_TYPES[0]
     camera._applied_orientation = None
+    camera._opening_hls_stream = False
+    camera.hass = MagicMock()
+    camera.hass.config.components = set()
 
     return camera
 
@@ -143,6 +146,44 @@ class TestTheStreamIsOpenedTheRightWayUp:
 
         with patch.object(Camera, "async_create_stream", AsyncMock(return_value=None)):
             assert await camera.async_create_stream() is None
+
+
+class TestWhereGo2rtcDoesTheShowing:
+    """With go2rtc set up, live view and stills come from it, not from HLS."""
+
+    URL = "http://10.0.66.40:18088/flv"
+
+    def test_go2rtc_is_asked_to_turn_the_picture(self) -> None:
+        camera = _camera(270)
+        camera.hass.config.components = {"go2rtc"}
+
+        assert camera._turned(self.URL) == f"ffmpeg:{self.URL}#video=h264#rotate=270"
+
+    def test_an_upright_picture_is_not_re_encoded(self) -> None:
+        camera = _camera(0)
+        camera.hass.config.components = {"go2rtc"}
+
+        assert camera._turned(self.URL) == self.URL
+
+    def test_without_go2rtc_the_address_goes_out_as_it_is(self) -> None:
+        camera = _camera(270)
+
+        assert camera._turned(self.URL) == self.URL
+
+    async def test_home_assistant_s_own_reader_gets_the_plain_address(self) -> None:
+        camera = _camera(270)
+        camera.hass.config.components = {"go2rtc"}
+        seen = []
+
+        async def create_stream(self):
+            seen.append(camera._turned(TestWhereGo2rtcDoesTheShowing.URL))
+            return _stream(Orientation.NO_TRANSFORM)
+
+        with patch.object(Camera, "async_create_stream", create_stream):
+            await camera.async_create_stream()
+
+        assert seen == [self.URL]
+        assert camera._opening_hls_stream is False
 
 
 class TestStartingTheCapture:

@@ -169,6 +169,7 @@ class AnycubicCamera(AnycubicCloudEntity, Camera):
         Camera.__init__(self)
         self._stream_proxy_token = secrets.token_urlsafe(32)
         self._applied_orientation: Orientation | None = None
+        self._opening_hls_stream = False
 
     async def async_create_stream(self) -> Stream | None:
         """Open the stream the right way up.
@@ -181,7 +182,14 @@ class AnycubicCamera(AnycubicCloudEntity, Camera):
         has made a choice, and it is left alone: this only fills in where
         nothing was chosen, or replaces what it put there itself last time.
         """
-        stream = await super().async_create_stream()
+        # Home Assistant's own stream reader gets the printer's address as it
+        # is; the go2rtc form below is something only go2rtc understands.
+        self._opening_hls_stream = True
+
+        try:
+            stream = await super().async_create_stream()
+        finally:
+            self._opening_hls_stream = False
 
         if stream is None:
             return None
@@ -225,11 +233,36 @@ class AnycubicCamera(AnycubicCloudEntity, Camera):
                 prefer_external=False,
             ).rstrip("/")
             path = _LOCAL_STREAM_PROXY_URL.format(entity_id=self.entity_id)
-            return f"{base_url}{path}?token={self._stream_proxy_token}"
+            return self._turned(f"{base_url}{path}?token={self._stream_proxy_token}")
 
         await self.coordinator.async_start_camera(self._printer_id)
 
-        return url
+        return self._turned(url)
+
+    def _turned(self, url: str) -> str:
+        """The stream address, asking go2rtc to turn the picture where it must.
+
+        Where go2rtc is set up, Home Assistant takes both the live view and
+        the stills from it, and go2rtc knows nothing of Home Assistant's
+        stream orientation -- the picture would stay as the printer sends it.
+        go2rtc can turn a stream itself when the source is handed to its
+        ffmpeg module, so that is what it gets. This re-encodes the video,
+        which is why it only happens when there is something to turn.
+
+        Without go2rtc, and for Home Assistant's own HLS reader, the address
+        goes out unchanged and the orientation set in async_create_stream
+        does the turning.
+        """
+        rotation = self.coordinator.camera_rotation(self._printer_id)
+
+        if (
+            not rotation
+            or self._opening_hls_stream
+            or "go2rtc" not in self.hass.config.components
+        ):
+            return url
+
+        return f"ffmpeg:{url}#video=h264#rotate={rotation}"
 
     def _needs_stream_proxy(self, url: str) -> bool:
         """Return whether this is the Kobra X endpoint that misreports 206."""

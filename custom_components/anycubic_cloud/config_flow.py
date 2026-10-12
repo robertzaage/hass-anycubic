@@ -45,6 +45,9 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CAMERA_ROTATION_AUTO,
+    CAMERA_ROTATION_OPTIONS,
+    CONF_CAMERA_ROTATION,
     CONF_CARD_CONFIG,
     CONF_DEBUG_API_CALLS,
     CONF_DEBUG_DEPRECATED,
@@ -1116,10 +1119,15 @@ class AnycubicCloudOptionsFlowHandler(OptionsFlow):
             host = str(user_input.get(CONF_LAN_HOST) or "").strip()
             enabled = bool(user_input.get(CONF_LAN_MODE_ENABLED))
 
+            rotation = str(
+                user_input.get(CONF_CAMERA_ROTATION) or CAMERA_ROTATION_AUTO
+            )
+
             if not enabled:
                 return self.async_create_entry_with_existing_options({
                     CONF_LAN_MODE_ENABLED: False,
                     CONF_LAN_HOST: host,
+                    CONF_CAMERA_ROTATION: rotation,
                 })
 
             if not host:
@@ -1134,6 +1142,7 @@ class AnycubicCloudOptionsFlowHandler(OptionsFlow):
                     return self.async_create_entry_with_existing_options({
                         CONF_LAN_MODE_ENABLED: True,
                         CONF_LAN_HOST: host,
+                        CONF_CAMERA_ROTATION: rotation,
                     })
 
         return self.async_show_form(
@@ -1147,6 +1156,16 @@ class AnycubicCloudOptionsFlowHandler(OptionsFlow):
                     CONF_LAN_HOST,
                     default=self.entry.options.get(CONF_LAN_HOST, ""),
                 ): cv.string,
+                vol.Optional(
+                    CONF_CAMERA_ROTATION,
+                    default=str(self.entry.options.get(
+                        CONF_CAMERA_ROTATION, CAMERA_ROTATION_AUTO
+                    )),
+                ): SelectSelector(SelectSelectorConfig(
+                    options=CAMERA_ROTATION_OPTIONS,
+                    mode=SelectSelectorMode.DROPDOWN,
+                    translation_key="camera_rotation",
+                )),
             }),
             errors=errors,
         )

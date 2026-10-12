@@ -614,9 +614,7 @@ class TestCamera:
         url = await camera.stream_source()
 
         assert url == "http://10.0.66.28:18088/flv"
-        published = client.publish.call_args.args
-        assert published[0] == "video"
-        assert published[1]["action"] == "startCapture"
+        client.publish_command.assert_called_once_with("video", "startCapture", {})
 
     async def test_no_url_means_no_stream_and_no_command(self, hass: HomeAssistant) -> None:
         camera, coordinator = self._camera(hass, None)
@@ -625,6 +623,7 @@ class TestCamera:
 
         assert await camera.stream_source() is None
         client.publish.assert_not_called()
+        client.publish_command.assert_not_called()
 
     async def test_starting_the_camera_without_a_connection_is_harmless(self, hass: HomeAssistant) -> None:
         await _coordinator(hass).async_start_camera(1)

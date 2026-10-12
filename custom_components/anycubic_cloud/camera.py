@@ -35,6 +35,7 @@ from homeassistant.components.camera import (
     WebRTCAnswer,
     WebRTCSendMessage,
 )
+from homeassistant.components.stream import Orientation, Stream
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -53,6 +54,20 @@ from .entity import AnycubicCloudEntity, AnycubicCloudEntityDescription
 PARALLEL_UPDATES = 0
 
 _KOBRA_X_MODEL_ID = "20030"
+
+# Clockwise degrees to Home Assistant's own stream orientation. Home Assistant
+# turns the HLS stream and the stills taken from it; nothing is re-encoded.
+_ORIENTATION_FOR_ROTATION = {
+    0: Orientation.NO_TRANSFORM,
+    90: Orientation.ROTATE_RIGHT,
+    180: Orientation.ROTATE_180,
+    270: Orientation.ROTATE_LEFT,
+}
+
+
+def orientation_for_rotation(degrees: int) -> Orientation:
+    """Home Assistant's orientation for a clockwise rotation; upright if unknown."""
+    return _ORIENTATION_FOR_ROTATION.get(int(degrees) % 360, Orientation.NO_TRANSFORM)
 _LOCAL_STREAM_PROXY_URL = "/api/anycubic_cloud/camera_stream/{entity_id}"
 _STREAM_CHUNK_SIZE = 64 * 1024
 _STREAM_CONNECT_TIMEOUT = 10
@@ -153,6 +168,34 @@ class AnycubicCamera(AnycubicCloudEntity, Camera):
         super().__init__(*args, **kwargs)
         Camera.__init__(self)
         self._stream_proxy_token = secrets.token_urlsafe(32)
+        self._applied_orientation: Orientation | None = None
+
+    async def async_create_stream(self) -> Stream | None:
+        """Open the stream the right way up.
+
+        The printer serves the picture as its sensor sees it, which on some
+        models is sideways. Home Assistant can turn a stream by itself, so the
+        rotation is handed to it rather than re-encoding anything here.
+
+        Someone who has set "stream orientation" in the entity's own settings
+        has made a choice, and it is left alone: this only fills in where
+        nothing was chosen, or replaces what it put there itself last time.
+        """
+        stream = await super().async_create_stream()
+
+        if stream is None:
+            return None
+
+        settings = stream.dynamic_stream_settings
+
+        if settings.orientation in (Orientation.NO_TRANSFORM, self._applied_orientation):
+            wanted = orientation_for_rotation(
+                self.coordinator.camera_rotation(self._printer_id)
+            )
+            settings.orientation = wanted
+            self._applied_orientation = wanted
+
+        return stream
 
     @property
     def _stream_url(self) -> str | None:

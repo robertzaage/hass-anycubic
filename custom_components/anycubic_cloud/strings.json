@@ -161,10 +161,12 @@
         "description": "Talk to the printer directly on your network instead of through Anycubic's cloud.\n\n⚠ Switching LAN Mode on REMOVES the printer from your Anycubic account. Switching it back off does not restore it, and nor does a power cycle — the printer has to be added again in the Anycubic app. This is the printer's behaviour, not the integration's.\n\nCloud-only features (the file library, uploads, print history) stop working. Everything the printer itself knows, including filament tracking, keeps working.\n\nSwitch LAN Mode on at the printer first, then enable it here.",
         "data": {
           "lan_mode_enabled": "Use the local connection",
-          "lan_host": "Printer address on your network"
+          "lan_host": "Printer address on your network",
+          "camera_rotation": "Camera picture rotation"
         },
         "data_description": {
-          "lan_host": "For example 10.0.0.42. A fixed address is strongly recommended."
+          "lan_host": "For example 10.0.0.42. A fixed address is strongly recommended.",
+          "camera_rotation": "Automatic turns the picture the way the printer model needs. Pick a number of degrees (clockwise) if the picture is still not upright, for example because the printer does not stand upright."
         }
       }
     },
@@ -1463,6 +1465,17 @@
     "token_expiring": {
       "title": "Anycubic token expires in {days} days",
       "description": "The token for **{name}** expires in about **{days} days**. Anycubic tokens last 90 days and can't be renewed automatically, so Home Assistant will lose access when it lapses.\n\n**1. Get a fresh token** with the one-click helper for your computer. Each one only reads a value your computer has already saved — nothing is sent anywhere.\n\n- [Mac — double-click this]({tool_macos})\n- [Windows — PowerShell one-liner]({tool_windows})\n- [Any browser — bookmarklet]({tool_browser})\n\n**2. [Open the integration]({reauth_url})** → ⋮ → **Reconfigure** → **Re-Auth**.\n\n**3. Paste it in.** You don't need to tidy it up or pick a type — it's worked out for you."
+    }
+  },
+  "selector": {
+    "camera_rotation": {
+      "options": {
+        "auto": "Automatic",
+        "0": "Not turned",
+        "90": "90° clockwise",
+        "180": "180°",
+        "270": "270° clockwise"
+      }
     }
   }
 }

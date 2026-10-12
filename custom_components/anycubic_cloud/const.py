@@ -59,6 +59,12 @@ CONF_FINISHED = "finished"
 CONF_MQTT_CONNECT_MODE = "mqtt_connect_mode"
 CONF_LAN_MODE_ENABLED = "lan_mode_enabled"
 CONF_LAN_HOST = "lan_host"
+# How far the local camera picture is turned, clockwise. "auto" takes what the
+# library knows for the printer's model; a number is the owner's own choice,
+# for a model nobody has measured or a printer that is not standing upright.
+CONF_CAMERA_ROTATION = "camera_rotation"
+CAMERA_ROTATION_AUTO = "auto"
+CAMERA_ROTATION_OPTIONS = [CAMERA_ROTATION_AUTO, "0", "90", "180", "270"]
 CONF_CARD_CONFIG = "card_config"
 CONF_DEBUG_DEPRECATED = "debug"
 CONF_DEBUG_MQTT_MSG = "debug_mqtt_msg"

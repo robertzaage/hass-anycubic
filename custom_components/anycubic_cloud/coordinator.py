@@ -71,7 +71,9 @@ from .const import (
     ATTR_SPOOL_SIGNATURE,
     ATTR_SPOOL_WEIGHT_G,
     ATTR_TOTALS,
+    CAMERA_ROTATION_AUTO,
     CAMERA_STREAM_PORT,
+    CONF_CAMERA_ROTATION,
     CONF_DEBUG_API_CALLS,
     CONF_DEBUG_DEPRECATED,
     CONF_DEBUG_MQTT_MSG,
@@ -1596,9 +1598,10 @@ class AnycubicCloudDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         try:
-            client.publish(
-                "video", {"type": "video", "action": "startCapture", "data": {}}
-            )
+            # In the full command envelope. The Kobras start on a bare
+            # message; a Photon P1 Max ignores anything without a timestamp
+            # and a message id, and its stream port then never opens.
+            client.publish_command("video", "startCapture", {})
         except AnycubicLANError as err:
             LOGGER.debug(f"Anycubic could not start the camera: {err}")
 
@@ -1638,6 +1641,27 @@ class AnycubicCloudDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         return credentials
+
+    def camera_rotation(self, printer_id: int) -> int:
+        """Degrees to turn the local camera picture, clockwise.
+
+        The owner's choice if one was made in the options, otherwise what the
+        library knows for this printer's model, otherwise 0. A printer serves
+        its camera as the sensor sees it -- a Photon P1 Max sideways -- and
+        nothing in the stream says which way is up.
+        """
+        chosen = str(self.entry.options.get(CONF_CAMERA_ROTATION, CAMERA_ROTATION_AUTO))
+
+        if chosen != CAMERA_ROTATION_AUTO:
+            try:
+                return int(chosen) % 360
+            except ValueError:
+                return 0
+
+        printer = self.get_printer_for_id(printer_id)
+
+        # getattr: older library versions do not know about rotation at all.
+        return int(getattr(printer, "camera_rotation", 0) or 0)
 
     def camera_stream_url(self, printer_id: int) -> str | None:
         """Where to read the video from.

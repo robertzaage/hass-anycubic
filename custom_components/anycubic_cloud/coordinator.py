@@ -153,6 +153,10 @@ if TYPE_CHECKING:
 
 
 LAN_FIRST_REPORT_TIMEOUT = 20
+# How long a printer that is clearly talking is given to also send its info
+# report before it is taken as one that never will. A Photon P1 Max answers
+# status and sends no info report at all.
+LAN_INFO_REPORT_GRACE = 5
 
 PRINTER_NOT_IN_CLOUD = (
     "The Anycubic cloud does not have this printer. If it is in LAN Mode, that "
@@ -1702,19 +1706,38 @@ class AnycubicCloudDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._lan_report_seen = asyncio.Event()
         client.query("info")
+        # Not every printer has an info report. A Photon P1 Max sends none and
+        # says it is there through its status report, so that is asked for as
+        # well -- waiting for info alone would wait for ever.
+        client.query("status")
 
         try:
             async with asyncio.timeout(LAN_FIRST_REPORT_TIMEOUT):
-                while "info" not in self._lan_reports:
+                while "info" not in self._lan_reports and "status" not in self._lan_reports:
                     self._lan_report_seen.clear()
                     await self._lan_report_seen.wait()
+
+            if "info" not in self._lan_reports:
+                # It talks. Give the info report a moment to follow -- on a
+                # Kobra it carries the printer's own name -- and go on without
+                # it if it does not come.
+                try:
+                    async with asyncio.timeout(LAN_INFO_REPORT_GRACE):
+                        while "info" not in self._lan_reports:
+                            self._lan_report_seen.clear()
+                            await self._lan_report_seen.wait()
+                except TimeoutError:
+                    LOGGER.debug(
+                        "Anycubic printer sent no info report; set up from "
+                        "what it did report."
+                    )
         except (TimeoutError, asyncio.CancelledError):
             LOGGER.debug("Anycubic printer did not report over the local connection.")
             return None
         finally:
             self._lan_report_seen = None
 
-        report = self._lan_reports["info"]
+        report = self._lan_reports.get("info") or {}
         data = report.get("data") or {}
         broker = client.broker
 

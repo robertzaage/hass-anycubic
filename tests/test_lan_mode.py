@@ -692,6 +692,70 @@ class TestPrinterFromLan:
 
         assert await coordinator._async_printer_from_lan(7) is None
 
+    async def test_a_printer_without_an_info_report_is_built_from_its_status(
+        self, hass: HomeAssistant
+    ) -> None:
+        """A Photon P1 Max answers status and never sends an info report.
+
+        Waiting for info alone left its setup waiting for ever.
+        """
+        import custom_components.anycubic_cloud.coordinator as coordinator_module
+
+        coordinator = self._ready(hass, report=None)
+        asked = []
+
+        def query(kind):
+            asked.append(kind)
+            if kind == "status":
+                coordinator._lan_reports["status"] = {
+                    "type": "status",
+                    "action": "workReport",
+                    "state": "free",
+                    "code": 200,
+                    "msg": "",
+                    "data": None,
+                }
+                if coordinator._lan_report_seen is not None:
+                    coordinator._lan_report_seen.set()
+
+        coordinator._lan_client.query = query
+
+        with patch.object(coordinator_module, "LAN_INFO_REPORT_GRACE", 0.05):
+            printer = await coordinator._async_printer_from_lan(7)
+
+        assert "status" in asked
+        assert printer is not None
+        assert printer.id == 7
+        # With no info report to name it, the handshake's model name stands in.
+        assert printer.name == BROKER.model_name
+
+    async def test_an_info_report_that_follows_the_status_is_still_used(
+        self, hass: HomeAssistant
+    ) -> None:
+        """A Kobra that answers status first keeps the name its info report gives."""
+        coordinator = self._ready(hass, report=None)
+
+        def query(kind):
+            coordinator._lan_reports[kind] = (
+                {"type": "status", "action": "workReport", "state": "free", "data": None}
+                if kind == "status"
+                else {
+                    "type": "info",
+                    "action": "report",
+                    "state": "done",
+                    "data": {"printerName": "Kobra S1", "version": "2.7.2.7"},
+                }
+            )
+            if coordinator._lan_report_seen is not None:
+                coordinator._lan_report_seen.set()
+
+        coordinator._lan_client.query = query
+
+        printer = await coordinator._async_printer_from_lan(7)
+
+        assert printer is not None
+        assert printer.name == "Kobra S1"
+
 
 class TestFallbackToLocal:
     """When the cloud cannot supply a printer, the local connection can."""
